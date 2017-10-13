@@ -1,0 +1,50 @@
+./denoise_anysize/denoise.lua:local cv = require 'cv'
+./denoise_anysize/denoise.lua:require 'cv.imgproc'
+./denoise_anysize/denoise.lua:require 'cv.imgcodecs'
+./denoise_anysize/denoise.lua:require 'cv.highgui'
+Binary file ./denoise_anysize/DB11/Peppers.png matches
+Binary file ./denoise_anysize/DB11/F.print.png matches
+Binary file ./denoise_anysize/DB11/Hill.png matches
+Binary file ./denoise_anysize/DB11/Man.png matches
+Binary file ./denoise_anysize/DB11/Montage.png matches
+Binary file ./denoise_anysize/DB11/Barbara.png matches
+Binary file ./denoise_anysize/DB11/Lena.png matches
+Binary file ./denoise_anysize/DB11/Couple.png matches
+./deblurring/demo.lua:local cv = require 'cv'
+./deblurring/demo.lua:require 'cv.imgproc'
+./deblurring/demo.lua:require 'cv.imgcodecs'
+./deblurring/demo.lua:require 'cv.highgui'
+./deblurring/demo.lua:        local image_blurred = cv.GaussianBlur{corrupted_image[{{i},{j},{},{}}]:squeeze(),ksize=kernelSize,sigmaX=sigma_X,sigmaY=sigma_Y}
+./deblurring/train.lua:local cv = require 'cv'
+./deblurring/train.lua:require 'cv.imgproc'
+./deblurring/train.lua:require 'cv.imgcodecs'
+./deblurring/train.lua:require 'cv.highgui'
+./deblurring/train.lua:        local image_blurred = cv.GaussianBlur{corrupted_image[{{i},{j},{},{}}]:squeeze(),ksize=kernelSize,sigmaX=sigma_X,sigmaY=sigma_Y}
+./deblurring/train.lua:              local image_blurred = cv.GaussianBlur{corrupted_image[{{i},{j},{},{}}]:squeeze(),ksize=kernelSize,sigmaX=sigma_X,sigmaY=sigma_Y}
+./README.md:This repository contains the training code for our [ICCV 2017 paper on All-Rounders for Image Restoration](http://vision.cs.utexas.edu/projects/on_demand_learning/gao-iccv2017.pdf). We propose an on-demand learning algorithm for training image restoration models with deep convolutional neural networks that can generalize across difficulty levels. This repo contains our code for four image restoration tasks---image inpainting, pixel interpolation, image deblurring, and image denoising. The code is adapted from [Soumith's DCGAN Implementation](https://github.com/soumith/dcgan.torch) and [Deepak Pathak's Context Encoder Implementation](https://github.com/pathak22/context-encoder).
+./README.md:2. Install torch-opencv: https://github.com/VisionLabs/torch-opencv/wiki/Installation
+./denoising/demo.lua:local cv = require 'cv'
+./denoising/demo.lua:require 'cv.imgproc'
+./denoising/demo.lua:require 'cv.imgcodecs'
+./denoising/demo.lua:require 'cv.highgui'
+./denoising/train.lua:local cv = require 'cv'
+./denoising/train.lua:require 'cv.imgproc'
+./denoising/train.lua:require 'cv.imgcodecs'
+./denoising/train.lua:require 'cv.highgui'
+Binary file ./models/denoise_anysize_net_G.t7 matches
+Binary file ./models/deblurring_net_G.t7 matches
+Binary file ./models/pixelInterpolation_net_G.t7 matches
+Binary file ./models/inpainting_net_G.t7 matches
+Binary file ./models/denoising_net_G.t7 matches
+Binary file ./inpainting/cache/.._dataset_my_val_set_trainCache.t7 matches
+Binary file ./inpainting/cache/.._dataset_my_test_set_trainCache.t7 matches
+Binary file ./inpainting/cache/.._dataset_my_test_set__trainCache.t7 matches
+Binary file ./inpainting/cache/.._dataset_my_val_set__trainCache.t7 matches
+Binary file ./inpainting/inpaint_demo.png matches
+Binary file ./pixelInterpolation/cache/.._dataset_my_test_set_trainCache.t7 matches
+Binary file ./pixelInterpolation/cache/.._dataset_my_test_set__trainCache.t7 matches
+./pixelInterpolation/train.lua:local cv = require 'cv'
+./pixelInterpolation/train.lua:require 'cv.imgproc'
+./pixelInterpolation/train.lua:require 'cv.imgcodecs'
+./pixelInterpolation/train.lua:require 'cv.highgui'
+Binary file ./pixelInterpolation/pixelInter_demo.png matches
