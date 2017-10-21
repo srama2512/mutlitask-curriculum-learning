@@ -1,0 +1,3 @@
+[submodule "on-demand-tf/commons"]
+	path = on-demand-tf/commons
+	url = git@github.com:hiwonjoon/tf-boilerplate.git
