@@ -9,11 +9,11 @@ Define the haversine distance function
 """
 def haversine_distance(point1, point2):
     """
-    Computes the haversie distance (in meters) between 
+    Computes the haversine distance (in meters) between 
     two points in the global coordinate systems.
     Source: http://www.movable-type.co.uk/scripts/latlong.html
-    point1 - tuple (longitude, latitude) in degrees
-    point2 - tuple (longitude, latitude) in degrees
+    point1 - tuple (latitude, longitude) in degrees
+    point2 - tuple (latitude, longitude) in degrees
     """
     lat1 = math.radians(point1[0])
     lat2 = math.radians(point2[0])
@@ -26,6 +26,21 @@ def haversine_distance(point1, point2):
     d = R*c
 
     return d
+
+def relative_translation(X1, X2):
+    """
+    Find relative (x, y, z) translation from X1 to X2 in meters.
+    Inputs:
+        X1 - tuple(latitude (deg), longitude (deg), height (m))
+        X2 - tuple(latitude (deg), longitude (deg), height (m))
+    """
+    R = 6371000.0 # In meters
+    x_ = math.cos(math.radians(X2[0]))*math.sin(math.radians(X2[1]-X1[1]))
+    y_ = math.cos(math.radians(X1[0]))*math.sin(math.radians(X2[0])) - \
+        math.sin(math.radians(X1[0]))*math.cos(math.radians(X2[0]))*math.cos(math.radians(X2[1]-X1[1]))
+    bearing = math.atan2(x_, y_)
+    hyp = haversine_distance(X1, X2)
+    return (hyp*math.cos(bearing), hyp*math.sin(bearing), X2[2]-X1[2])
 
 def angle_2points(point1, point2):
     """
@@ -70,19 +85,27 @@ def baseline_angle_1(point1, point2, center):
     """
     Convert to x, y, z coordinates
     """
-    x1 = (R + h1)*math.cos(phi1)*math.sin(theta1)
-    y1 = -(R + h1)*math.cos(phi1)*math.cos(theta1)
-    z1 = (R+h1)*math.sin(phi1)
+    # Optimization
+    cos_phi1 = math.cos(phi1)
+    cos_phi2 = math.cos(phi2)
+    cos_phic = math.cos(phic)
+    R1 = R + h1
+    R2 = R + h2
+    Rc = R + hc
+
+    x1 = R1 * cos_phi1 * math.sin(theta1)
+    y1 = -R1 * cos_phi1 * math.cos(theta1)
+    z1 = R1 * math.sin(phi1)
     X1 = np.array([x1, y1, z1])
     
-    x2 = (R + h2)*math.cos(phi2)*math.sin(theta2)
-    y2 = -(R + h2)*math.cos(phi2)*math.cos(theta2)
-    z2 = (R+h2)*math.sin(phi2)
+    x2 = R2 * cos_phi2 * math.sin(theta2)
+    y2 = -R2 * cos_phi2 * math.cos(theta2)
+    z2 = R2 * math.sin(phi2)
     X2 = np.array([x2, y2, z2])
     
-    xc = (R + hc)*math.cos(phic)*math.sin(thetac)
-    yc = -(R + hc)*math.cos(phic)*math.cos(thetac)
-    zc = (R+hc)*math.sin(phic)
+    xc = Rc * cos_phic * math.sin(thetac)
+    yc = -Rc * cos_phic * math.cos(thetac)
+    zc = Rc * math.sin(phic)
     Xc = np.array([xc, yc, zc])
     
     return angle_2points(X1-Xc, X2-Xc)
@@ -165,7 +188,7 @@ def create_target_cache(dataset_dir, base_dir):
             targetID = int(strSplit[3])
 
             txtPath = base_dir + f
-            with open(txtPath) as infile:
+            with open(dataset_dir + txtPath) as infile:
                 data = infile.read().split('\n')[:-1]
 
             if len(data) == 2:
@@ -188,14 +211,15 @@ def create_target_cache(dataset_dir, base_dir):
 
             imgPath = base_dir + f.replace('.txt', '.jpg')
             txtPath = base_dir + f
-            with open(txtPath) as infile:
+            with open(dataset_dir + txtPath) as infile:
                 data = infile.read().split('\n')[:-1]
 
             if len(data) == 2:
                 align_data = data[1].split()
                 data = data[0].split()
-                targetCoord = [float(data[5]), float(data[6]), float(data[7])]
-                cameraCoord = [float(data[11]), float(data[12]), float(data[13])]
+                targetCoord = map(float, data[5:8])
+                cameraCoord = map(float, data[11:14])
+                cameraPose = map(float, data[15:18])
 
                 distance = haversine_distance(targetCoord, cameraCoord)
                 distance_given = float(data[14])
@@ -205,7 +229,7 @@ def create_target_cache(dataset_dir, base_dir):
                     #pdb.set_trace()
 
                 targets[targetID]['views'].append({'cameraCoord': cameraCoord, 'distance': distance_given, 'imagePath': imgPath, \
-                                                   'alignData': align_data})
+                        'alignData': align_data, 'cameraPose': cameraPose})
                 count += 1
                 #print('Done with %d/%d'%(count, len(txtfiles)))
 

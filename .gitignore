@@ -13,3 +13,4 @@ on-demand-learning/dataset
 3d-generic/dataset/
 SUN397_ODL/
 venv_project/
+*.pyc
