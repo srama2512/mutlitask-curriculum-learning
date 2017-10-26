@@ -1,5 +1,6 @@
 import better_exceptions
 import tensorflow as tf
+import random
 import numpy as np
 from tqdm import tqdm
 
@@ -11,7 +12,7 @@ def main(config,
          DATA_DIR,
          LOG_DIR,
          BATCH_SIZE,
-         VALID_BATCH_SIZE,
+         DEMAND_TEST_ITER,
          NUM_THREADS,
          MAX_EPOCH,
          TRAIN_NUM,
@@ -21,13 +22,16 @@ def main(config,
          DECAY_STAIRCASE,
          SAVE_PERIOD,
          SUMMARY_PERIOD):
+    random.seed(RANDOM_SEED)
     np.random.seed(RANDOM_SEED)
     tf.set_random_seed(RANDOM_SEED)
 
     # >>>>>>> DATASET
     sun = SUN397(DATA_DIR,TRAIN_NUM,RANDOM_SEED)
-    _,_,train_y,train_x= sun.build_queue(BATCH_SIZE,NUM_THREADS)
-    _,_,valid_y,valid_x= sun.build_queue(VALID_BATCH_SIZE,NUM_THREADS,train=False)
+
+    train_batch_levels = tf.placeholder(tf.int32,[BATCH_SIZE,])
+    _,_,train_y,train_x= sun.build_queue(train_batch_levels,NUM_THREADS)
+    _,_,valid_y,valid_x= sun.build_queue(tf.convert_to_tensor(np.array([0,1,2,3,4]*2)),NUM_THREADS,train=False)
     # <<<<<<<
 
     # >>>>>>> MODEL
@@ -58,17 +62,35 @@ def main(config,
         # Summary Operations
         tf.summary.scalar('loss',l2_loss)
         tf.summary.scalar('valid_loss',valid_loss),
+        # mse & psnr
+        def _imagify(ims,cast=tf.uint8):
+            ims = tf.transpose(ims,(0,2,3,1))
+            return tf.cast((ims / 2 + 0.5)*255.0,cast)
+        def _psnr(mse):
+            return (20. * tf.log(255.) - 10. * tf.log(mse)) / tf.log(10.)
+
+
+        mse_op = tf.reduce_mean((_imagify(net.pred,tf.float32) - _imagify(train_y,tf.float32))**2,axis=[1,2,3])
+        psnr_op = _psnr(mse_op)
+        valid_mse_op = tf.reduce_mean((_imagify(valid_net.pred,tf.float32) - _imagify(valid_y,tf.float32))**2,axis=[1,2,3])
+        valid_psnr_op = _psnr(valid_mse_op)
+        tf.summary.scalar('mse',tf.reduce_mean(mse_op))
+        tf.summary.scalar('psnr',tf.reduce_mean(psnr_op))
+        tf.summary.scalar('valid_mse',tf.reduce_mean(valid_mse_op))
+        tf.summary.scalar('valid_psnr',tf.reduce_mean(valid_psnr_op))
+
         summary_op = tf.summary.merge_all()
+
 
         # Expensive Summaries
         extended_summary_op = tf.summary.merge([
-            tf.summary.image('train_task_images',tf.transpose(train_x,(0,2,3,1)),max_outputs=5),
-            tf.summary.image('train_pred',tf.transpose(net.pred,(0,2,3,1)),max_outputs=5),
-            tf.summary.image('train_answer',tf.transpose(train_y,(0,2,3,1)),max_outputs=5),
+            tf.summary.image('train_task_images',_imagify(train_x),max_outputs=5),
+            tf.summary.image('train_pred',_imagify(net.pred),max_outputs=5),
+            tf.summary.image('train_answer',_imagify(train_y),max_outputs=5),
 
-            tf.summary.image('valid_task_images',tf.transpose(valid_x,(0,2,3,1)),max_outputs=5),
-            tf.summary.image('valid_pred',tf.transpose(valid_net.pred,(0,2,3,1)),max_outputs=5),
-            tf.summary.image('valid_answer',tf.transpose(valid_y,(0,2,3,1)),max_outputs=5),
+            tf.summary.image('valid_task_images',_imagify(valid_x),max_outputs=5),
+            tf.summary.image('valid_pred',_imagify(valid_net.pred),max_outputs=5),
+            tf.summary.image('valid_answer',_imagify(valid_y),max_outputs=5),
         ])
 
         # Initialize op
@@ -86,26 +108,41 @@ def main(config,
     summary_writer = tf.summary.FileWriter(LOG_DIR,sess.graph)
     summary_writer.add_summary(config_summary.eval(session=sess))
 
+    ratios = [0.2,0.2,0.2,0.2,0.2]
     try:
         # Start Queueing
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(coord=coord,sess=sess)
         for epoch in tqdm(xrange(MAX_EPOCH)):
+            levels = [ l for l,ratio in enumerate(ratios)
+                        for _ in xrange(int(ratio*BATCH_SIZE))]
+            while(len(levels)<BATCH_SIZE):
+                levels.append(4)
+            random.shuffle(levels) # For randomized summary....
+
+            tqdm.write('[%3d] Current Ratio %s'%(epoch,str(ratios)))
             for step in tqdm(xrange(TRAIN_NUM)):
-                it,loss,_ = sess.run([global_step,l2_loss,train_op])
+                it,loss,mse,psnr,_ = sess.run([global_step,l2_loss,mse_op,psnr_op,train_op],feed_dict={train_batch_levels:levels})
 
                 if( it % SAVE_PERIOD == 0 ):
                     net.save(sess,LOG_DIR,step=it)
 
                 if( it % SUMMARY_PERIOD == 0 ):
-                    summary = sess.run(summary_op)
+                    summary = sess.run(summary_op,feed_dict={train_batch_levels:levels})
                     summary_writer.add_summary(summary,it)
 
                 if( it % (SUMMARY_PERIOD*10) == 0 ):
-                    summary = sess.run(extended_summary_op)
+                    summary = sess.run(extended_summary_op,feed_dict={train_batch_levels:levels})
                     summary_writer.add_summary(summary,it)
 
-                tqdm.write('[%3d/%05d] Loss: %1.3f'%(epoch,step,loss))
+                tqdm.write('[%3d/%05d] Loss: %1.3f MSE: %1.3f PSNR: %1.3f'%(epoch,step,loss,np.mean(mse),np.mean(psnr)))
+
+            # calculate next batch ratios
+            valid_psnr = []
+            for _ in tqdm(xrange(DEMAND_TEST_ITER)):
+                valid_psnr.append(sess.run(valid_psnr_op).reshape(2,5))
+            valid_psnr= np.mean(np.concatenate(valid_psnr,axis=0),axis=0)
+            ratios = (1/valid_psnr) / np.sum(1/valid_psnr)
     except Exception as e:
         coord.request_stop(e)
     finally :
@@ -119,11 +156,11 @@ def get_default_param():
     from datetime import datetime
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     return {
-        'LOG_DIR':'./log/%s'%(now),
+        'LOG_DIR':'./log_fill_random_multi/%s'%(now),
         'DATA_DIR':'datasets/SUN397',
 
         'BATCH_SIZE' : 100,
-        'VALID_BATCH_SIZE' : 10,
+        'DEMAND_TEST_ITER' : 50, # 500 samples to decide next difficulty ratio
         'NUM_THREADS' : 4,
 
         'MAX_EPOCH' : 150,
