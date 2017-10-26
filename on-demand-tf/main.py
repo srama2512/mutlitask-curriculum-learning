@@ -11,6 +11,7 @@ def main(config,
          RANDOM_SEED,
          DATA_DIR,
          LOG_DIR,
+         TASK_NUM,
          BATCH_SIZE,
          DEMAND_TEST_ITER,
          NUM_THREADS,
@@ -22,6 +23,7 @@ def main(config,
          DECAY_STAIRCASE,
          SAVE_PERIOD,
          SUMMARY_PERIOD):
+    assert(TASK_NUM in [0,1,2])
     random.seed(RANDOM_SEED)
     np.random.seed(RANDOM_SEED)
     tf.set_random_seed(RANDOM_SEED)
@@ -30,8 +32,8 @@ def main(config,
     sun = SUN397(DATA_DIR,TRAIN_NUM,RANDOM_SEED)
 
     train_batch_levels = tf.placeholder(tf.int32,[BATCH_SIZE,])
-    _,_,train_y,train_x= sun.build_queue(train_batch_levels,NUM_THREADS)
-    _,_,valid_y,valid_x= sun.build_queue(tf.convert_to_tensor(np.array([0,1,2,3,4]*2)),NUM_THREADS,train=False)
+    _,_,train_y,train_x= sun.build_queue(tf.convert_to_tensor(np.array([TASK_NUM]*BATCH_SIZE)),train_batch_levels,NUM_THREADS)
+    _,_,valid_y,valid_x= sun.build_queue(tf.convert_to_tensor(np.array([TASK_NUM]*10)),tf.convert_to_tensor(np.array([0,1,2,3,4]*2)),NUM_THREADS,train=False)
     # <<<<<<<
 
     # >>>>>>> MODEL
@@ -135,7 +137,7 @@ def main(config,
                     summary = sess.run(extended_summary_op,feed_dict={train_batch_levels:levels})
                     summary_writer.add_summary(summary,it)
 
-                tqdm.write('[%3d/%05d] Loss: %1.3f MSE: %1.3f PSNR: %1.3f'%(epoch,step,loss,np.mean(mse),np.mean(psnr)))
+                tqdm.write('[%3d/%5d] Loss: %1.3f MSE: %1.3f PSNR: %1.3f'%(epoch,step,loss,np.mean(mse),np.mean(psnr)))
 
             # calculate next batch ratios
             valid_psnr = []
@@ -156,9 +158,10 @@ def get_default_param():
     from datetime import datetime
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     return {
-        'LOG_DIR':'./log_fill_random_multi/%s'%(now),
+        'LOG_DIR':'./log_temp/%s'%(now),
         'DATA_DIR':'datasets/SUN397',
 
+        'TASK_NUM' : 1,
         'BATCH_SIZE' : 100,
         'DEMAND_TEST_ITER' : 50, # 500 samples to decide next difficulty ratio
         'NUM_THREADS' : 4,
