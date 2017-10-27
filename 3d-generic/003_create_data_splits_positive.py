@@ -35,10 +35,10 @@ with open(os.path.join(opts.save_dir, 'regTrain', 'format.txt'), 'w') as fopen:
                  <relative lateral translation meters> <relative height meters> \
                  <baseline angle in degrees> <distance between targets>')
 
-for base_dir in ['0002/', '0003/', '0004/', '0009/', '0012/']:
-#for base_dir in ['0014/', '0015/', '0017/', '0020/']:
+#for base_dir in ['0002/', '0003/', '0004/', '0009/', '0012/']:
+for base_dir in ['0014/', '0015/', '0017/', '0020/']:
     
-    regpairs_positive = open(os.path.join(opts.save_dir, 'regTrain', 'regpairs_positive_%s.txt'%(base_dir[:-1])), 'a')
+    regpairs_positive = open(os.path.join(opts.save_dir, 'regTrain', 'regpairs_positive_%s.txt'%(base_dir[:-1])), 'w')
     targets = create_target_cache(opts.dataset_dir, base_dir) 
     print('\nProcessing data subset: %s'%(base_dir))
     count_targets = 0
@@ -92,7 +92,7 @@ for base_dir in ['0002/', '0003/', '0004/', '0009/', '0012/']:
             box1 = (l1, t1, r1, b1)
             img_curr = img_curr.crop(box1)
             # Resize image to 101x101 
-            img_curr.resize([101, 101])
+            img_curr = img_curr.resize([101, 101])
             img_curr.save(save_path)
         
         if count_targets % 100 == 0:
