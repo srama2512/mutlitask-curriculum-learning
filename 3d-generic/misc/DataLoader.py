@@ -1,6 +1,7 @@
 import h5py
 import json
 import numpy as np
+import torch
 
 class DataLoader:
 
@@ -59,6 +60,8 @@ class DataLoader:
        
         print('===> DataLoader: Loading images. This might take a while ...')
         self.images = np.array(self.h5_file['images'])
+        # Hack for debugging
+        # self.images = np.zeros(self.h5_file['images'].shape, dtype=np.uint8)
         self.positive_labels = np.array(self.h5_file['positive_labels'][:, 0]).astype(np.int32)
         self.negative_labels = np.array(self.h5_file['negative_labels'][:, 0]).astype(np.int32)
         self.negative_dists = np.array(self.h5_file['negative_labels'][:, 1])
@@ -149,9 +152,9 @@ class DataLoader:
                 samples_per_level[0] += self.batch_size - self.nLevels*(self.batch_size//self.nLevels)
 
         # Create output memory
-        out_images_left = np.zeros((self.batch_size, 3, 101, 101), dtype=np.float64)
-        out_images_right = np.zeros((self.batch_size, 3, 101, 101), dtype=np.float64)
-        out_labels = np.zeros((self.batch_size, 6), dtype=np.float64)
+        out_images_left = np.zeros((self.batch_size, 3, 101, 101), dtype=np.float32)
+        out_images_right = np.zeros((self.batch_size, 3, 101, 101), dtype=np.float32)
+        out_labels = np.zeros((self.batch_size, 6), dtype=np.float32)
 
         count_batch = 0
         for i in range(self.nLevels):
@@ -178,7 +181,7 @@ class DataLoader:
             out_labels[:, lb] -= self.label_mean[lb]
             out_labels[:, lb] /= (self.label_std[lb] + 1e-5)
     
-        return out_images_left, out_images_right, out_labels 
+        return torch.from_numpy(out_images_left), torch.from_numpy(out_images_right), torch.from_numpy(out_labels) 
 
     def batch_pose_valid(self):
         """
@@ -198,8 +201,8 @@ class DataLoader:
         sample_indices = self.pos_val_samples[self.pose_valid_counter:(self.pose_valid_counter + curr_batch_size)]
         curr_pairs = np.take(self.positive_pairs, sample_indices, axis=0)
         
-        out_images_left = np.take(self.images, curr_pairs[:, 0], axis=0).astype(np.float64)
-        out_images_right = np.take(self.images, curr_pairs[:, 1], axis=0).astype(np.float64)
+        out_images_left = np.take(self.images, curr_pairs[:, 0], axis=0).astype(np.float32)
+        out_images_right = np.take(self.images, curr_pairs[:, 1], axis=0).astype(np.float32)
         out_labels = np.take(self.pose_labels, sample_indices, axis=0)
         self.pose_valid_counter += curr_batch_size
         
@@ -220,7 +223,7 @@ class DataLoader:
             self.pose_valid_counter = 0
             isExhausted = True
         
-        return out_images_left, out_images_right, out_labels, isExhausted
+        return torch.from_numpy(out_images_left), torch.from_numpy(out_images_right), torch.from_numpy(out_labels), isExhausted
             
     def batch_match(self, pos_samples_per_level=None):
         """
@@ -240,9 +243,9 @@ class DataLoader:
                 pos_samples_per_level[0] += pos_batch_size - self.nLevels*(pos_batch_size//self.nLevels)
         
         # Create output memory
-        out_images_left = np.zeros((self.batch_size, 3, 101, 101), dtype=np.float64)
-        out_images_right = np.zeros((self.batch_size, 3, 101, 101), dtype=np.float64)
-        out_labels = np.zeros((self.batch_size), dtype=np.int32)
+        out_images_left = np.zeros((self.batch_size, 3, 101, 101), dtype=np.float32)
+        out_images_right = np.zeros((self.batch_size, 3, 101, 101), dtype=np.float32)
+        out_labels = np.zeros((self.batch_size, 1), dtype=np.int32)
         
         count_batch = 0
 
@@ -257,7 +260,7 @@ class DataLoader:
 
                 #out_labels[count_batch : (count_batch + pos_samples_per_level[i]), :] = np.take(self.positive_labels, sample_indices, axis=0)
                 # SHORTCUT
-                out_labels[count_batch : (count_batch + pos_samples_per_level[i])] = 1
+                out_labels[count_batch : (count_batch + pos_samples_per_level[i]), 0] = 1
                 count_batch += pos_samples_per_level[i]
             
         assert(count_batch == pos_batch_size)
@@ -270,7 +273,7 @@ class DataLoader:
 
         #out_labels[count_batch: , :] = np.take(self.negative_labels, sample_indices, axis=0)
         # SHORTCUT
-        out_labels[count_batch:] = 0
+        out_labels[count_batch:, 0] = 0
 
         # Preprocess the images
         for chn in range(3):
@@ -279,7 +282,7 @@ class DataLoader:
             out_images_left[:, chn, :, :] /= self.image_std[chn]
             out_images_right[:, chn, :, :] /= self.image_std[chn]
 
-        return out_images_left, out_images_right, out_labels 
+        return torch.from_numpy(out_images_left), torch.from_numpy(out_images_right), torch.from_numpy(out_labels) 
 
     def batch_match_valid(self, isPositive):
         """
@@ -301,10 +304,10 @@ class DataLoader:
             sample_indices = self.pos_val_samples[self.match_pos_valid_counter:(self.match_pos_valid_counter + curr_batch_size)]
             curr_pairs = np.take(self.positive_pairs, sample_indices, axis=0)
             
-            out_labels = np.zeros((curr_batch_size), dtype=np.int32)
-            out_images_left = np.take(self.images, curr_pairs[:, 0], axis=0).astype(np.float64)
-            out_images_right = np.take(self.images, curr_pairs[:, 1], axis=0).astype(np.float64)
-            out_labels[:] = 1 
+            out_labels = np.zeros((curr_batch_size, 1), dtype=np.int32)
+            out_images_left = np.take(self.images, curr_pairs[:, 0], axis=0).astype(np.float32)
+            out_images_right = np.take(self.images, curr_pairs[:, 1], axis=0).astype(np.float32)
+            out_labels[:, 0] = 1 
             self.match_pos_valid_counter += curr_batch_size
             # If exhausted
             if self.match_pos_valid_counter == self.nPosValid:
@@ -323,10 +326,10 @@ class DataLoader:
             start_idx = self.nNegTrain + self.match_neg_valid_counter
             sample_indices = np.arange(start_idx, start_idx + curr_batch_size, 1)
             curr_pairs = np.take(self.negative_pairs, sample_indices, axis=0)
-            out_labels = np.zeros((curr_batch_size), dtype=np.int32)
-            out_images_left = np.take(self.images, curr_pairs[:, 0], axis=0).astype(np.float64)
-            out_images_right = np.take(self.images, curr_pairs[:, 1], axis=0).astype(np.float64)
-            out_labels[:] = 0
+            out_labels = np.zeros((curr_batch_size, 1), dtype=np.int32)
+            out_images_left = np.take(self.images, curr_pairs[:, 0], axis=0).astype(np.float32)
+            out_images_right = np.take(self.images, curr_pairs[:, 1], axis=0).astype(np.float32)
+            out_labels[:, 0] = 0
             self.match_neg_valid_counter += curr_batch_size
             # If exhausted
             if self.match_neg_valid_counter == self.nPosValid:
@@ -341,4 +344,4 @@ class DataLoader:
             out_images_left[:, chn, :, :] /= (self.image_std[chn] + 1e-5)
             out_images_right[:, chn, :, :] /= (self.image_std[chn] + 1e-5)
 
-        return out_images_left, out_images_right, out_labels, isExhausted
+        return torch.from_numpy(out_images_left), torch.from_numpy(out_images_right), torch.from_numpy(out_labels), isExhausted

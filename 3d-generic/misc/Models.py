@@ -43,7 +43,7 @@ class ModelJoint(nn.Module):
 
     def forward(self, inputs):
         p = self.forward_pose(inputs['pose'][0], inputs['pose'][1])
-        m = self.forward_pose(inputs['match'][0], inputs['match'][1])
+        m = self.forward_match(inputs['match'][0], inputs['match'][1])
         return [p, m]
 
     def forward_pose(self, imgs_left, imgs_right):
