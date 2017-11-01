@@ -27,6 +27,70 @@ def haversine_distance(point1, point2):
 
     return d
 
+# Source for these two functions
+# https://www.learnopencv.com/rotation-matrix-to-euler-angles/
+def isRotationMatrix(R) :
+    Rt = np.transpose(R)
+    shouldBeIdentity = np.dot(Rt, R)
+    I = np.identity(3, dtype = R.dtype)
+    n = np.linalg.norm(I - shouldBeIdentity)
+    return n < 1e-6
+
+def rotationMatrixToEulerAngles(R) :
+    assert(isRotationMatrix(R))
+    sy = math.sqrt(R[0,0] * R[0,0] +  R[1,0] * R[1,0])
+    singular = sy < 1e-6
+    if  not singular :
+        x = math.atan2(R[2,1] , R[2,2])
+        y = math.atan2(-R[2,0], sy)
+        z = math.atan2(R[1,0], R[0,0])
+    else :
+        x = math.atan2(-R[1,2], R[1,1])
+        y = math.atan2(-R[2,0], sy)
+        z = 0
+ 
+    return np.array([z, y, x])
+
+def relative_rotation(X1, X2):
+    """
+    Find relative (yaw, pitch, roll) rotation from X1 to X2 in degrees.
+    Inputs:
+        X1 - iterable(yaw, pitch, roll)
+        X2 - iterable(yaw, pitch, roll)
+    """
+    yaw1 = math.radians(X1[0])
+    pitch1 = math.radians(X1[1])
+    roll1 = math.radians(X1[2])
+    yaw2 = math.radians(X2[0])
+    pitch2 = math.radians(X2[1])
+    roll2 = math.radians(X2[2])
+
+    rot_z_1 = np.array([[math.cos(yaw1), math.sin(yaw1), 0], \
+                        [-math.sin(yaw1), math.cos(yaw1), 0], \
+                        [0, 0, 1]])
+    rot_y_1 = np.array([[math.cos(pitch1), 0, math.sin(pitch1)], \
+                        [0, 1, 0],
+                        [-math.sin(pitch1), 0, math.cos(pitch1)]])
+    
+    # Ignore roll rotation for the purposes of this dataset (roll is always 0)
+    rot_z_2 = np.array([[math.cos(yaw2), math.sin(yaw2), 0], \
+                        [-math.sin(yaw2), math.cos(yaw2), 0], \
+                        [0, 0, 1]])
+    rot_y_2 = np.array([[math.cos(pitch2), 0, math.sin(pitch2)], \
+                        [0, 1, 0],
+                        [-math.sin(pitch2), 0, math.cos(pitch2)]])
+
+    # The transformation is generally rotation about z first, then y. To go from 
+    # X1 to X2, we have to undo y first, undo z, then perform z and y for X2.
+    rot_undo_1 = np.matmul(rot_z_1.transpose(), rot_y_1.transpose())
+    rot_do_2 = np.matmul(rot_y_2, rot_z_2)
+    rot_relative = np.matmul(rot_do_2, rot_undo_1)
+    
+    # Convert rotation matrix to degrees
+    angles = rotationMatrixToEulerAngles(rot_relative.transpose())
+
+    return [math.degrees(angle_i) for angle_i in angles]
+
 def relative_translation(X1, X2):
     """
     Find relative (x, y, z) translation from X1 to X2 in meters.
@@ -236,3 +300,36 @@ def create_target_cache(dataset_dir, base_dir):
         pickle.dump(targets, open(dataset_dir + 'targets_%s.pkl'%(base_dir[:-1]), 'w'))
 
     return targets
+
+def average_angular_error(predicted_angles, true_angles):
+    """
+    Angle between predicted pose vector and ground truth vector in the plane defined by their
+    cross products. 
+    Inputs:
+        predicted_angles: Nx3 or Nx2 numpy array
+        true_angles:      Nx3 or Nx2 numpy arrau
+    """
+    avg_error = 0
+    for i in range(predicted_angles.shape[0]):
+        avg_error += np.abs(angle_2points(predicted_angles[i, :], true_angles[i, :]))
+    
+    avg_error /= float(predicted_angles.shape[0])
+    
+    return float(avg_error)
+
+def average_translation_error(predicted_translations, true_translations):
+    """
+    L2 norm of the difference between the normalized translation and ground truth
+    vectors. 
+    Inputs:
+        predicted_translations: Nx3 numpy array
+        true_translations:      Nx3 numpy array
+    """
+    norm_predicted = np.sqrt(np.sum(predicted_translations * predicted_translations, 1))
+    normalized_pred = predicted_translations / np.reshape(norm_predicted, (-1, 1))
+    norm_predicted = np.sqrt(np.sum(true_translations * true_translations, 1))
+    normalized_true = true_translations / np.reshape(norm_predicted, (-1, 1))
+    avg_error = np.sum((normalized_true - normalized_pred) * (normalized_true - normalized_pred), 1)
+    avg_error = np.mean(avg_error)
+
+    return float(avg_error)

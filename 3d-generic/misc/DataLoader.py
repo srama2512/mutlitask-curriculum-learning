@@ -61,11 +61,15 @@ class DataLoader:
         print('===> DataLoader: Loading images. This might take a while ...')
         self.images = np.array(self.h5_file['images'])
         # Hack for debugging
-        # self.images = np.zeros(self.h5_file['images'].shape, dtype=np.uint8)
+        #self.images = np.zeros(self.h5_file['images'].shape, dtype=np.uint8)
         self.positive_labels = np.array(self.h5_file['positive_labels'][:, 0]).astype(np.int32)
         self.negative_labels = np.array(self.h5_file['negative_labels'][:, 0]).astype(np.int32)
         self.negative_dists = np.array(self.h5_file['negative_labels'][:, 1])
-        self.pose_labels = np.array(self.h5_file['pose_labels'][:, :-1])
+        temp_labels = np.array(self.h5_file['pose_labels'][:, :-1])
+        self.pose_labels = np.zeros((temp_labels.shape[0], 5), dtype=np.float32)
+        self.pose_labels[:, 0:2] = temp_labels[:, 0:2]
+        self.pose_labels[:, 2:] = temp_labels[:, 3:]
+
         self.base_angles = np.array(self.h5_file['pose_labels'][:, -1])
 
         self.positive_pairs = np.array(self.h5_file['positive_pairs']).astype(np.int32)
@@ -154,7 +158,7 @@ class DataLoader:
         # Create output memory
         out_images_left = np.zeros((self.batch_size, 3, 101, 101), dtype=np.float32)
         out_images_right = np.zeros((self.batch_size, 3, 101, 101), dtype=np.float32)
-        out_labels = np.zeros((self.batch_size, 6), dtype=np.float32)
+        out_labels = np.zeros((self.batch_size, 5), dtype=np.float32)
 
         count_batch = 0
         for i in range(self.nLevels):
@@ -177,7 +181,7 @@ class DataLoader:
             out_images_left[:, chn, :, :] /= (self.image_std[chn] + 1e-5)
             out_images_right[:, chn, :, :] /= (self.image_std[chn] + 1e-5)
 
-        for lb in range(6):
+        for lb in range(5):
             out_labels[:, lb] -= self.label_mean[lb]
             out_labels[:, lb] /= (self.label_std[lb] + 1e-5)
     
@@ -203,7 +207,7 @@ class DataLoader:
         
         out_images_left = np.take(self.images, curr_pairs[:, 0], axis=0).astype(np.float32)
         out_images_right = np.take(self.images, curr_pairs[:, 1], axis=0).astype(np.float32)
-        out_labels = np.take(self.pose_labels, sample_indices, axis=0)
+        out_labels = np.take(self.pose_labels, sample_indices, axis=0).astype(np.float32)
         self.pose_valid_counter += curr_batch_size
         
         # Preprocess the images and labels
@@ -213,7 +217,7 @@ class DataLoader:
             out_images_left[:, chn, :, :] /= (self.image_std[chn] + 1e-5)
             out_images_right[:, chn, :, :] /= (self.image_std[chn] + 1e-5)
 
-        for lb in range(6):
+        for lb in range(5):
             out_labels[:, lb] -= self.label_mean[lb]
             out_labels[:, lb] /= (self.label_std[lb] + 1e-5)
 

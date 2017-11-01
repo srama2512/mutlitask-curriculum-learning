@@ -31,27 +31,17 @@ opts = parser.parse_args()
 sys.path.append(os.path.join(os.path.abspath(''), 'misc/'))
 
 from DataLoader import DataLoader
-from Models import ModelJoint
+from Models import ModelMatch
 # Create the data loader
 print('Creating the DataLoader')
 loader = DataLoader(opts)
 
 # Create the model
 print('\nCreating the joint Model\n')
-net = ModelJoint()
+net = ModelMatch()
 print(net)
 
 # Define the loss functions
-def criterion_pose(pred, labels, size_average=True):
-    # Compute L2 norm squared
-    e2 = (pred - labels)*(pred - labels)
-    e2 = e2.sum(1)
-    if size_average:
-        return torch.mean(torch.log(F.relu(e2-1)+1) - F.relu(1-e2) + 1)
-        #return torch.mean(e2)
-    else:
-        return torch.sum(torch.log(F.relu(e2-1)+1 - F.relu(1-e2) + 1))
-        #return torch.sum(e2)
 
 criterion_match = nn.BCEWithLogitsLoss()
 criterion_match_valid = nn.BCEWithLogitsLoss(size_average=False)
@@ -60,7 +50,6 @@ if opts.cuda and not torch.cuda.is_available():
     raise Exception("No GPU found, please run without --cuda")
 if opts.cuda:
     net = net.cuda()
-    #criterion_pose = criterion_pose.cuda() 
     criterion_match = criterion_match.cuda()
     criterion_match_valid = criterion_match_valid.cuda()
 
@@ -155,25 +144,19 @@ net.train()
 for iter_no in range(opts.iters):
     
     optimizer.zero_grad()
-    pose_curriculum = [90, 80, 80, 0, 0]
     match_curriculum = [45, 40, 40, 0, 0]
-    #pose_curriculum = [opts.batch_size // loader.nLevels for i in range(loader.nLevels)]
     #match_curriculum = [opts.batch_size // (2*loader.nLevels) for i in range(loader.nLevels)]
-    pose_left, pose_right, pose_labels = loader.batch_pose(pose_curriculum)
     match_left, match_right, match_labels = loader.batch_match(match_curriculum)
     match_labels = match_labels.float()
-
-    temp_list = [pose_left, pose_right, pose_labels, match_left, match_right, match_labels]
-    temp_list = [Variable(element) for element in temp_list]
+    
+    match_left, match_right, match_labels = Variable(match_left), Variable(match_right), Variable(match_labels)
     
     if opts.cuda:
-        temp_list = [element.cuda() for element in temp_list]
-    
-    inputs = {'pose': temp_list[0:2], 'match': temp_list[3:5]}
-    preds0, preds1 = net.forward(inputs)
+        match_left, match_right, match_labels = match_left.cuda(), match_right.cuda(), match_labels.cuda()
 
-    loss_pose = criterion_pose(preds0, temp_list[2]) 
-    loss_match = criterion_match(preds1, temp_list[5])
+    preds1 = net.forward(match_left, match_right)
+
+    loss_match = criterion_match(preds1, match_labels)
 
     # The total loss is loss_pose + opts.loss_lambda * loss_match
     # This means that you have to backpropagate 1 via loss_pose and
@@ -184,12 +167,8 @@ for iter_no in range(opts.iters):
     #torch.autograd.backward([loss_pose, loss_match], \
     #                        [loss_pose.data.new(1).fill_(1), \
     #                         loss_match.data.new(1).fill_(opts.loss_lambda)])
-    loss_total = loss_pose + opts.loss_lambda * loss_match
-    loss_total.backward()
+    loss_match.backward()
    
-    #if (iter_no+1) % 100 == 0:
-    #    pdb.set_trace()
-
     if opts.gradient_clip:
         # NOTE: 0.25 was selected arbitrarily. The authors have not provided the
         # gradient clipping value.
@@ -197,14 +176,11 @@ for iter_no in range(opts.iters):
     optimizer.step()
 
     if (iter_no+1) % 100 == 0:
-        print('===> Iteration: %5d,          Loss:%8.4f'%(iter_no+1, loss_pose.data[0] +\
-                                                opts.loss_lambda * loss_match.data[0]))
+        print('===> Iteration: %5d,          Loss:%8.4f'%(iter_no+1, loss_match.data[0]))
     
     
     if (iter_no+1) % 1000 == 0 or iter_no == 0:
-        pose_loss, pose_loss_per_level = evaluate(net, loader, 'pose', opts) 
         match_loss, match_loss_per_level = evaluate(net, loader, 'match', opts)
-        print('Pose loss: %.4f'%(pose_loss))
-        print('   '.join(['Lvl %d: %.4f'%(i, v) for i, v in enumerate(pose_loss_per_level)]))
         print('Match loss: %.4f'%(match_loss))
         print('   '.join(['Lvl %d: %.4f'%(i, v) for i, v in enumerate(match_loss_per_level)]))
+        print(match_loss_per_level)
