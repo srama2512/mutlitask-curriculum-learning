@@ -57,6 +57,10 @@ def relative_rotation(X1, X2):
     Inputs:
         X1 - iterable(yaw, pitch, roll)
         X2 - iterable(yaw, pitch, roll)
+
+    Primary references:
+    https://en.wikipedia.org/wiki/Rotation_matrix
+    https://www.learnopencv.com/rotation-matrix-to-euler-angles/
     """
     yaw1 = math.radians(X1[0])
     pitch1 = math.radians(X1[1])
@@ -65,16 +69,18 @@ def relative_rotation(X1, X2):
     pitch2 = math.radians(X2[1])
     roll2 = math.radians(X2[2])
 
-    rot_z_1 = np.array([[math.cos(yaw1), math.sin(yaw1), 0], \
-                        [-math.sin(yaw1), math.cos(yaw1), 0], \
+    # Use negative of the true angles here
+    # NOTE: These rotations are for post multiplication
+    rot_z_1 = np.array([[math.cos(yaw1), -math.sin(yaw1), 0], \
+                        [math.sin(yaw1), math.cos(yaw1), 0], \
                         [0, 0, 1]])
     rot_y_1 = np.array([[math.cos(pitch1), 0, math.sin(pitch1)], \
                         [0, 1, 0],
                         [-math.sin(pitch1), 0, math.cos(pitch1)]])
     
     # Ignore roll rotation for the purposes of this dataset (roll is always 0)
-    rot_z_2 = np.array([[math.cos(yaw2), math.sin(yaw2), 0], \
-                        [-math.sin(yaw2), math.cos(yaw2), 0], \
+    rot_z_2 = np.array([[math.cos(yaw2), -math.sin(yaw2), 0], \
+                        [math.sin(yaw2), math.cos(yaw2), 0], \
                         [0, 0, 1]])
     rot_y_2 = np.array([[math.cos(pitch2), 0, math.sin(pitch2)], \
                         [0, 1, 0],
@@ -82,12 +88,12 @@ def relative_rotation(X1, X2):
 
     # The transformation is generally rotation about z first, then y. To go from 
     # X1 to X2, we have to undo y first, undo z, then perform z and y for X2.
-    rot_undo_1 = np.matmul(rot_z_1.transpose(), rot_y_1.transpose())
-    rot_do_2 = np.matmul(rot_y_2, rot_z_2)
-    rot_relative = np.matmul(rot_do_2, rot_undo_1)
+    rot_undo_1 = np.matmul(rot_y_1.transpose(), rot_z_1.transpose())
+    rot_do_2 = np.matmul(rot_z_2, rot_y_2)
+    rot_relative = np.matmul(rot_undo_1, rot_do_2)
     
     # Convert rotation matrix to degrees
-    angles = rotationMatrixToEulerAngles(rot_relative.transpose())
+    angles = rotationMatrixToEulerAngles(rot_relative)
 
     return [math.degrees(angle_i) for angle_i in angles]
 
