@@ -1,7 +1,8 @@
-import math
+from sklearn.metrics import roc_auc_score
 import numpy as np
-import pickle
 import subprocess
+import pickle
+import math
 import os
 
 """
@@ -312,12 +313,12 @@ def average_angular_error(predicted_angles, true_angles):
     Angle between predicted pose vector and ground truth vector in the plane defined by their
     cross products. 
     Inputs:
-        predicted_angles: Nx3 or Nx2 numpy array
-        true_angles:      Nx3 or Nx2 numpy arrau
+        predicted_angles : Nx3 or Nx2 numpy array
+        true_angles      : Nx3 or Nx2 numpy arrau
     """
     avg_error = 0
     for i in range(predicted_angles.shape[0]):
-        avg_error += np.abs(angle_2points(predicted_angles[i, :], true_angles[i, :]))
+        avg_error +=np.linalg.norm(np.array(relative_rotation(predicted_angles[i, :], true_angles[i, :])))
     
     avg_error /= float(predicted_angles.shape[0])
     
@@ -328,8 +329,8 @@ def average_translation_error(predicted_translations, true_translations):
     L2 norm of the difference between the normalized translation and ground truth
     vectors. 
     Inputs:
-        predicted_translations: Nx3 numpy array
-        true_translations:      Nx3 numpy array
+        predicted_translations : Nx3 numpy array
+        true_translations      : Nx3 numpy array
     """
     norm_predicted = np.sqrt(np.sum(predicted_translations * predicted_translations, 1))
     normalized_pred = predicted_translations / np.reshape(norm_predicted, (-1, 1))
@@ -339,3 +340,13 @@ def average_translation_error(predicted_translations, true_translations):
     avg_error = np.mean(avg_error)
 
     return float(avg_error)
+
+def auc_score(predicted_probabilities, true_classes):
+    """
+    Computes the area under the ROC curve given the binary probabilities
+    of predicting class 1 and the true class labels.
+    Inputs:
+        predicted_probabilities : N numpy array
+        true_classes           : N numpy array
+    """
+    return float(roc_auc_score(true_classes, predicted_probabilities))

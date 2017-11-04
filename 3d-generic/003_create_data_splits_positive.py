@@ -35,8 +35,8 @@ with open(os.path.join(opts.save_dir, 'regTrain', 'format.txt'), 'w') as fopen:
                  <relative lateral translation meters> <relative height meters> \
                  <baseline angle in degrees> <distance between targets>')
 
-for base_dir in ['0002/', '0003/', '0004/', '0009/', '0012/']:
-#for base_dir in ['0014/', '0015/', '0017/', '0020/']:
+#for base_dir in ['0002/', '0003/', '0004/', '0009/', '0012/']:
+for base_dir in ['0014/', '0015/', '0017/', '0020/']:
     
     regpairs_positive = open(os.path.join(opts.save_dir, 'regTrain', 'regpairs_positive_%s.txt'%(base_dir[:-1])), 'w')
     targets = create_target_cache(opts.dataset_dir, base_dir) 
@@ -67,7 +67,8 @@ for base_dir in ['0002/', '0003/', '0004/', '0009/', '0012/']:
                         views_to_write.add(j)
 
                         # Compute relative pose (view_j - view_i)
-                        rel_pose = relative_rotation(view_i['cameraPose'], view_j['cameraPose'])
+                        rel_pose = [v[1] - v[0] for v in zip(view_i['cameraPose'], view_j['cameraPose'])]
+                        #relative_rotation(view_i['cameraPose'], view_j['cameraPose'])
 
                         # Compute relative translation (view_j - view_i)
                         rel_trans = relative_translation(view_i['cameraCoord'], view_j['cameraCoord'])

@@ -10,7 +10,7 @@ def ixvr(input_layer, bias_val=0):
 
 def inrml(input_layer, mean=0, std=0.05):
     nn.init.normal(input_layer.weight, mean, std);
-    nn.init.constant(input_layer.bias, 0.01);
+    nn.init.constant(input_layer.bias, 0.1);
     return input_layer
 
 class ModelJoint(nn.Module):

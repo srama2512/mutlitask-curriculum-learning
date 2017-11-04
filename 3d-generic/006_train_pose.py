@@ -31,6 +31,7 @@ parser.add_argument('--logdir', type=str, default='')
 parser.add_argument('--save_dir', type=str, default='')
 parser.add_argument('--strategy', type=int, default=0, \
         help='[0: Fixated easy, 1: Fixated hard, 2: Rigid joint, 3: 3D Generic baseline, 4: Cumulative curriculum, 5: On Demand Learning]')
+parser.add_argument('--lr_schedule', type=int, default=60000, help='reduce learning rate by 10 after every N epochs')
 
 opts = parser.parse_args()
 
@@ -98,7 +99,11 @@ if opts.cuda and not torch.cuda.is_available():
 if opts.cuda:
     net = net.cuda()
 
-optimizer = optim.SGD(net.parameters(), lr=opts.lr, momentum=opts.momentum)
+def create_optimizer(net, lr, mom):
+    optimizer = optim.SGD(net.parameters(), lr, mom)
+    return optimizer
+
+optimizer = create_optimizer(net, opts.lr, opts.momentum)
 
 def evaluate(net, loader, task, opts):
     net.eval()
@@ -134,14 +139,24 @@ def evaluate(net, loader, task, opts):
             # If current level samples are exhausted
             if total_size % samples_per_level == 0:
                 curr_idx += 1
-            saved_predictions.append(pred.data.cpu().numpy())
-            saved_truth.append(labels.data.cpu().numpy())
+
+            pred_np = np.zeros((pred.size()[0], 6))
+            labels_np = np.zeros((pred.size()[0], 6))
+            pred_tmp = pred.data.cpu().numpy()
+            labels_tmp = labels.data.cpu().numpy()
+            pred_np[:, 0:2] = pred_tmp[:, 0:2]
+            labels_np[:, 0:2] = labels_tmp[:, 0:2]
+            pred_np[:, 3:] = pred_tmp[:, 2:]
+            labels_np[:, 3:] = labels_tmp[:, 2:]
+
+            saved_predictions.append(pred_np)
+            saved_truth.append(labels_np)
+
         saved_predictions = np.vstack(saved_predictions)
         saved_truth = np.vstack(saved_truth)
-
         #NOTE: Assumes that only heading and pitch are being predicted. No roll. 
-        aae = average_angular_error(saved_predictions[:, 0:2], saved_truth[:, 0:2])
-        ate = average_translation_error(saved_predictions[:, 2:], saved_truth[:, 2:])
+        aae = average_angular_error(saved_predictions[:, 0:3], saved_truth[:, 0:3])
+        ate = average_translation_error(saved_predictions[:, 3:], saved_truth[:, 3:])
     
     for i in range(len(level_specific_loss)):
         level_specific_loss[i] /= samples_per_level
@@ -153,7 +168,6 @@ def evaluate(net, loader, task, opts):
    
 # Start training
 iter_no = 0
-best_validation_loss = 100000000.0 # Simply assigning large value to signify Infinity
 net.train()
 
 curriculum_opts = Namespace()
@@ -163,9 +177,16 @@ curriculum_opts.batch_size = opts.batch_size
 curriculum_opts.nLevels = loader.nLevels
 curriculum_opts.iters = opts.iters
 valid_loss_best = 10000
+current_lr = opts.lr
 
 for iter_no in range(opts.iters):
-    
+  
+    # Changing the learning rate schedule by creating a new optimizer
+    if (iter_no + 1) % opts.lr_schedule == 0:
+        print('===> Reducing Learning rate by 2')
+        current_lr = current_lr / 2
+        optimizer = create_optimizer(net, current_lr, opts.momentum)
+
     optimizer.zero_grad()
    
     curriculum_opts.iter_no = iter_no
@@ -175,10 +196,10 @@ for iter_no in range(opts.iters):
     pose_left, pose_right, pose_labels = Variable(pose_left), Variable(pose_right), Variable(pose_labels)
     
     if opts.cuda:
-        pose_left, pose_right, pose_label = pose_left.cuda(), pose_right.cuda(), pose_labels.cuda()
+        pose_left, pose_right, pose_labels = pose_left.cuda(), pose_right.cuda(), pose_labels.cuda()
 
     preds0 = net.forward(pose_left, pose_right)
-    loss_pose = criterion_pose(preds0, pose_label) 
+    loss_pose = criterion_pose(preds0, pose_labels) 
     loss_pose.backward()
    
     if opts.gradient_clip:
