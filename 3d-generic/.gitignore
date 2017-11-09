@@ -1,5 +1,4 @@
 *.pyc
 models
 runs
-scripts
 tensorboard

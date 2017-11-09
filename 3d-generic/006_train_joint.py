@@ -33,8 +33,10 @@ parser.add_argument('--save_dir', type=str, default='')
 parser.add_argument('--strategy', type=int, default=0, \
                 help='[0: Fixated easy, 1: Fixated hard, 2: Rigid joint, 3: 3D Generic baseline, 4: Cumulative curriculum, 5: On Demand Learning]')
 parser.add_argument('--lr_schedule', type=int, default=60000, help='reduce learning rate by 10 after every N epochs')
+parser.add_argument('--load_model', type=str, default='', help='continue training from this checkpoint')
 
 opts = parser.parse_args()
+print(opts)
 if len(opts.logdir) == 0:
     writer = SummaryWriter()
 else:
@@ -75,14 +77,9 @@ print('\nCreating the joint Model\n')
 net = ModelJoint()
 print(net)
 
-pose_dummy_input_left = Variable(torch.randn((1, 3, 101, 101)))
-pose_dummy_input_right = Variable(torch.randn((1, 3, 101, 101)))
-match_dummy_input_left = Variable(torch.randn((1, 3, 101, 101)))
-match_dummy_input_right = Variable(torch.randn((1, 3, 101, 101)))
-dummy_output_pose, dummy_output_match = net({'pose': [pose_dummy_input_left, pose_dummy_input_right], 'match': [match_dummy_input_left, match_dummy_input_right]})
-
-writer.add_graph(net, dummy_output_pose)
-writer.add_graph(net, dummy_output_match)
+if opts.load_model != '':
+    net.load_state_dict(torch.load(opts.load_model))
+    print('===> Loaded model from %s'%(opts.load_model))
 
 # Define the loss functions
 def criterion_pose(pred, labels, size_average=True):
@@ -110,6 +107,16 @@ if opts.cuda:
 def create_optimizer(net, lr, mom):
     optimizer = optim.SGD(net.parameters(), lr, mom)
     return optimizer
+
+pose_dummy_input_left = Variable(torch.randn((1, 3, 101, 101))).cuda()
+pose_dummy_input_right = Variable(torch.randn((1, 3, 101, 101))).cuda()
+match_dummy_input_left = Variable(torch.randn((1, 3, 101, 101))).cuda()
+match_dummy_input_right = Variable(torch.randn((1, 3, 101, 101))).cuda()
+dummy_output_pose, dummy_output_match = net({'pose': [pose_dummy_input_left, pose_dummy_input_right], 'match': [match_dummy_input_left, match_dummy_input_right]})
+
+writer.add_graph(net, dummy_output_pose)
+writer.add_graph(net, dummy_output_match)
+
 
 optimizer = create_optimizer(net, opts.lr, opts.momentum)
 
@@ -263,7 +270,7 @@ for iter_no in range(opts.iters):
     # Changing the learning rate schedule by creating a new optimizer
     if (iter_no + 1) % opts.lr_schedule == 0:
         print('===> Reducing Learning rate by 10')
-        current_lr = current_lr / 10
+        current_lr = current_lr / 2
         optimizer = create_optimizer(net, current_lr, opts.momentum)
  
     optimizer.zero_grad()
@@ -326,7 +333,8 @@ for iter_no in range(opts.iters):
         pose_loss, pose_loss_per_level, valid_aae, valid_ate = evaluate_pose(net, loader, 'pose', opts) 
         match_loss, match_loss_per_level, match_auc = evaluate_match(net, loader, 'match', opts)
         
-        curriculum_opts.val_loss_levels = match_loss_per_level
+        curriculum_opts.val_loss_levels = [v[0] + opts.loss_lambda*v[1] for v in zip(pose_loss_per_level, match_loss_per_level)]
+
         if match_loss <= valid_loss_best:
             valid_loss_best = pose_loss + opts.loss_lambda*match_loss
             torch.save(net.state_dict(), os.path.join(opts.save_dir, 'model_best.net')) 

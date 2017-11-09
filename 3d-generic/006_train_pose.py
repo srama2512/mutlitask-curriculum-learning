@@ -77,11 +77,6 @@ print('\nCreating the Pose Model\n')
 net = ModelPose()
 print(net)
 
-dummy_input_left = Variable(torch.randn((1, 3, 101, 101)))
-dummy_input_right = Variable(torch.randn((1, 3, 101, 101)))
-dummy_output = net(dummy_input_left, dummy_input_right)
-writer.add_graph(net, dummy_output)
-
 # Define the loss functions
 def criterion_pose(pred, labels, size_average=True):
     # Compute L2 norm squared
@@ -98,6 +93,11 @@ if opts.cuda and not torch.cuda.is_available():
     raise Exception("No GPU found, please run without --cuda")
 if opts.cuda:
     net = net.cuda()
+
+dummy_input_left = Variable(torch.randn((1, 3, 101, 101))).cuda()
+dummy_input_right = Variable(torch.randn((1, 3, 101, 101))).cuda()
+dummy_output = net(dummy_input_left, dummy_input_right)
+writer.add_graph(net, dummy_output)
 
 def create_optimizer(net, lr, mom):
     optimizer = optim.SGD(net.parameters(), lr, mom)
