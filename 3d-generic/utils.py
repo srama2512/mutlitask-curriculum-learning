@@ -1,4 +1,5 @@
 from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_curve
 import numpy as np
 import subprocess
 import pickle
@@ -308,45 +309,68 @@ def create_target_cache(dataset_dir, base_dir):
 
     return targets
 
-def average_angular_error(predicted_angles, true_angles):
+def average_angular_error(predicted_angles, true_angles, average=True):
     """
     Angle between predicted pose vector and ground truth vector in the plane defined by their
     cross products. 
     Inputs:
-        predicted_angles : Nx3 or Nx2 numpy array
-        true_angles      : Nx3 or Nx2 numpy arrau
+        predicted_angles : Nx3 numpy array
+        true_angles      : Nx3 numpy array
+        average          : bool (if this is true, it returns average. Otherwise, it returns the
+                           error for each element.
     """
-    avg_error = 0
-    for i in range(predicted_angles.shape[0]):
-        avg_error +=np.linalg.norm(np.array(relative_rotation(predicted_angles[i, :], true_angles[i, :])))
-    
-    avg_error /= float(predicted_angles.shape[0])
-    
-    return float(avg_error)
+    if average:
+        avg_error = 0
+        for i in range(predicted_angles.shape[0]):
+            avg_error +=np.linalg.norm(np.array(relative_rotation(predicted_angles[i, :], true_angles[i, :])))
+        
+        avg_error /= float(predicted_angles.shape[0])
+        
+        return float(avg_error)
+    else:
+        errors = []
+        for i in range(predicted_angles.shape[0]):
+            errors.append(np.linalg.norm(np.array(relative_rotation(predicted_angles[i, :], true_angles[i, :]))))
+        return errors
 
-def average_translation_error(predicted_translations, true_translations):
+def average_translation_error(predicted_translations, true_translations, average=True):
     """
     L2 norm of the difference between the normalized translation and ground truth
     vectors. 
     Inputs:
         predicted_translations : Nx3 numpy array
         true_translations      : Nx3 numpy array
+        average                : bool (if this is true, it returns average. Otherwise, it returns the
+                                 error for each element.
+
     """
     norm_predicted = np.sqrt(np.sum(predicted_translations * predicted_translations, 1))
     normalized_pred = predicted_translations / np.reshape(norm_predicted, (-1, 1))
     norm_predicted = np.sqrt(np.sum(true_translations * true_translations, 1))
     normalized_true = true_translations / np.reshape(norm_predicted, (-1, 1))
-    avg_error = np.sum((normalized_true - normalized_pred) * (normalized_true - normalized_pred), 1)
-    avg_error = np.mean(avg_error)
+    
+    if average:
+        avg_error = np.sum((normalized_true - normalized_pred) * (normalized_true - normalized_pred), 1)
+        avg_error = np.mean(avg_error)
 
-    return float(avg_error)
+        return float(avg_error)
+    else:
+        errors = np.sum((normalized_true - normalized_pred) * (normalized_true - normalized_pred), 1)
+        return errors
 
-def auc_score(predicted_probabilities, true_classes):
+def auc_score(predicted_probabilities, true_classes, get_roc=False):
     """
     Computes the area under the ROC curve given the binary probabilities
     of predicting class 1 and the true class labels.
     Inputs:
         predicted_probabilities : N numpy array
-        true_classes           : N numpy array
+        true_classes            : N numpy array
+        get_roc                 : bool, if True, return also the ROC curve
     """
-    return float(roc_auc_score(true_classes, predicted_probabilities))
+    if not get_roc:
+        return float(roc_auc_score(true_classes, predicted_probabilities))
+    else:
+        fpr, tpr, thresh = roc_curve(true_classes, predicted_probabilities)
+        return float(roc_auc_score(true_classes, predicted_probabilities)), tpr, fpr, thresh
+              
+

@@ -58,11 +58,11 @@ def cumulative_curriculum(opts):
     Starts with simplest task and then cumulatively adds other levels.
     """
     #NOTE: Assumes that iter_no starts at 0
-    curr_levels = opts.iter_no // (opts.iters // opts.nLevel) + 1
+    curr_levels = opts.iter_no // (opts.iters // opts.nLevels) + 1
     temp_opts = Namespace() 
     temp_opts.batch_size = opts.batch_size
     temp_opts.nLevels = curr_levels
-    return rigid_joint_learning(temp_opts)
+    return rigid_joint_learning(temp_opts)+[0 for i in range(opts.nLevels-curr_levels)]
 
 def on_demand_learning(opts):
     """

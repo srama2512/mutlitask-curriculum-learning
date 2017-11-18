@@ -34,7 +34,7 @@ parser.add_argument('--strategy', type=int, default=0, \
                 help='[0: Fixated easy, 1: Fixated hard, 2: Rigid joint, 3: 3D Generic baseline, 4: Cumulative curriculum, 5: On Demand Learning]')
 parser.add_argument('--lr_schedule', type=int, default=60000, help='reduce learning rate by 10 after every N epochs')
 parser.add_argument('--load_model', type=str, default='', help='continue training from this checkpoint')
-
+parser.add_argument('--curriculum_update_every', type=int, default=1000, help='Curriculum update interval')
 opts = parser.parse_args()
 print(opts)
 if len(opts.logdir) == 0:
@@ -252,7 +252,6 @@ def evaluate_match(net, loader, task, opts):
     net.train()
     return mean_loss, level_specific_loss, auc_value
 
-            
 iter_no = 0
 net.train()
 
@@ -276,11 +275,13 @@ for iter_no in range(opts.iters):
     optimizer.zero_grad()
     
     curriculum_opts.iter_no = iter_no
-    pose_curriculum = getCurriculum(curriculum_opts)
-    # Match curriculum is half of pose_curriculum
-    match_curriculum = [samples//2 for samples in pose_curriculum]
-    if sum(match_curriculum) < opts.batch_size//2:
-        match_curriculum[0] += opts.batch_size//2 - sum(match_curriculum)
+
+    if (iter_no+1) % opts.curriculum_update_every == 0 or iter_no == 0:
+        pose_curriculum = getCurriculum(curriculum_opts)
+        # Match curriculum is half of pose_curriculum
+        match_curriculum = [samples//2 for samples in pose_curriculum]
+        if sum(match_curriculum) < opts.batch_size//2:
+            match_curriculum[0] += opts.batch_size//2 - sum(match_curriculum)
  
     pose_left, pose_right, pose_labels = loader.batch_pose(pose_curriculum)
     match_left, match_right, match_labels = loader.batch_match(match_curriculum)
@@ -345,6 +346,8 @@ for iter_no in range(opts.iters):
         writer.add_scalar('data/val_match_auc', match_auc, iter_no)
 	writer.add_scalar('data/val_pose_loss', pose_loss, iter_no)
         writer.add_scalars('data/val_pose_loss_levels', {"level-%d"%(i): pose_loss_per_level[i] for i in range(len(pose_loss_per_level))}, iter_no)
+        writer.add_scalars('data/pose_curriculum', {'level-%d'%(i): pose_curriculum[i] for i in range(len(pose_curriculum))}, iter_no)
+
         writer.add_scalar('data/pose_average_angular_error', valid_aae, iter_no)
         writer.add_scalar('data/pose_average_translation_error', valid_ate, iter_no)
 	

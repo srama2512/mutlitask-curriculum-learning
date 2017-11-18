@@ -32,6 +32,8 @@ parser.add_argument('--save_dir', type=str, default='')
 parser.add_argument('--strategy', type=int, default=0, \
         help='[0: Fixated easy, 1: Fixated hard, 2: Rigid joint, 3: 3D Generic baseline, 4: Cumulative curriculum, 5: On Demand Learning]')
 parser.add_argument('--lr_schedule', type=int, default=60000, help='reduce learning rate by 10 after every N epochs')
+parser.add_argument('--load_model', type=str, default='', help='continue training from this checkpoint')
+parser.add_argument('--curriculum_update_every', type=int, default=1000, help='Curriculum update interval')
 
 opts = parser.parse_args()
 
@@ -76,6 +78,9 @@ loader = DataLoader(opts)
 print('\nCreating the Pose Model\n')
 net = ModelPose()
 print(net)
+if opts.load_model != '':
+    net.load_state_dict(torch.load(opts.load_model))
+    print('===> Loaded model from %s'%(opts.load_model))
 
 # Define the loss functions
 def criterion_pose(pred, labels, size_average=True):
@@ -190,7 +195,9 @@ for iter_no in range(opts.iters):
     optimizer.zero_grad()
    
     curriculum_opts.iter_no = iter_no
-    pose_curriculum = getCurriculum(curriculum_opts) 
+
+    if (iter_no+1) % opts.curriculum_update_every == 0 or iter_no == 0:
+        pose_curriculum = getCurriculum(curriculum_opts) 
     
     pose_left, pose_right, pose_labels = loader.batch_pose(pose_curriculum)
     pose_left, pose_right, pose_labels = Variable(pose_left), Variable(pose_right), Variable(pose_labels)

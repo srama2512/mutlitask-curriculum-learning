@@ -32,6 +32,8 @@ parser.add_argument('--save_dir', type=str, default='')
 parser.add_argument('--strategy', type=int, default=0, \
         help='[0: Fixated easy, 1: Fixated hard, 2: Rigid joint, 3: 3D Generic baseline, 4: Cumulative curriculum, 5: On Demand Learning]')
 parser.add_argument('--lr_schedule', type=int, default=60000, help='reduce learning rate by 10 after every N epochs')
+parser.add_argument('--load_model', type=str, default='', help='continue training from this checkpoint')
+parser.add_argument('--curriculum_update_every', type=int, default=1000, help='Curriculum update interval')
 
 opts = parser.parse_args()
 
@@ -74,6 +76,10 @@ loader = DataLoader(opts)
 print('\nCreating the joint Model\n')
 net = ModelMatch()
 print(net)
+
+if opts.load_model != '':
+    net.load_state_dict(torch.load(opts.load_model))
+    print('===> Loaded model from %s'%(opts.load_model))
 
 dummy_input_left = Variable(torch.randn((1, 3, 101, 101)))
 dummy_input_right = Variable(torch.randn((1, 3, 101, 101)))
@@ -192,11 +198,13 @@ for iter_no in range(opts.iters):
     optimizer.zero_grad()
 
     curriculum_opts.iter_no = iter_no
-    pose_curriculum = getCurriculum(curriculum_opts)
-    # Match curriculum is half of pose_curriculum
-    match_curriculum = [samples//2 for samples in pose_curriculum]
-    if sum(match_curriculum) < opts.batch_size//2:
-        match_curriculum[0] += opts.batch_size//2 - sum(match_curriculum)
+
+    if (iter_no+1) % opts.curriculum_update_every == 0 or iter_no == 0:
+        pose_curriculum = getCurriculum(curriculum_opts)
+        # Match curriculum is half of pose_curriculum
+        match_curriculum = [samples//2 for samples in pose_curriculum]
+        if sum(match_curriculum) < opts.batch_size//2:
+            match_curriculum[0] += opts.batch_size//2 - sum(match_curriculum)
 
     match_left, match_right, match_labels = loader.batch_match(match_curriculum)
     match_labels = match_labels.float()
@@ -218,7 +226,7 @@ for iter_no in range(opts.iters):
         torch.nn.utils.clip_grad_norm(net.parameters(), 0.1)
     optimizer.step()
 
-    if (iter_no+1) % 100 == 0:
+    if (iter_no+1) % 50 == 0:
         print('===> Iteration: %5d,          Loss:%8.4f'%(iter_no+1, loss_match.data[0]))
         writer.add_scalar('data/train_loss', loss_match.data[0], iter_no)
         for name, param in net.named_parameters():
