@@ -208,3 +208,52 @@ class ModelMatch(nn.Module):
 
         return x
 
+class ModelSurfaceNormal(nn.Module):
+    def __init__(self):
+        super(ModelSurfaceNormal, self).__init__()
+        self.base_conv = nn.Sequential(
+                          inrml(nn.Conv2d(3, 20, 7, stride=1, padding=3)), # 3x101x101 -> 20x101x101
+                          nn.ReLU(inplace=True), 
+                          nn.BatchNorm2d(20),
+                          nn.MaxPool2d(2, stride=2), # 20x50x50
+                          inrml(nn.Conv2d(20, 40, 5, stride=1, padding=2)), # 40x50x50
+                          nn.ReLU(inplace=True),
+                          nn.BatchNorm2d(40),
+                          nn.MaxPool2d(2, stride=2), # 40x25x25
+                          inrml(nn.Conv2d(40, 80, 4, stride=1, padding=1)), # 80x24x24
+                          nn.ReLU(inplace=True),
+                          nn.BatchNorm2d(80),
+                          nn.MaxPool2d(2, stride=2), # 80x12x12
+                          inrml(nn.Conv2d(80, 160, 4, stride=2, padding=1)), # 160x6x6
+                          nn.ReLU(inplace=True),
+                          nn.BatchNorm2d(160),
+                          nn.MaxPool2d(2, stride=2)) # 160x3x3
+
+        self.base_fc = nn.Sequential(
+                          inrml(nn.Conv2d(160, 500, 3, stride=1, padding=0)), 
+                          nn.ReLU(inplace=True),
+                          inrml(nn.Conv2d(500, 500, 1, stride=1, padding=0)),
+                          nn.ReLU(inplace=True),
+                          # Classify into 20 classes
+                          inrml(nn.Conv2d(500, 20, 1, stride=1, padding=0)))
+    
+    def load_weights(self, state_dict):
+        """
+        Loads directly from a joint/pose/match network's stored checkpoint
+        """
+        own_state = self.state_dict()
+        # Copy the convloutional layers
+        for name, param in state_dict.iteritems():
+            if 'base_conv' in name:
+                own_state[name].copy_(param)
+        # Convert the FC layers to convolutional layers
+        own_state['base_fc.0.weight'].copy_(state_dict['base_fc.0.weight'].view(500, 160, 3, 3))
+        own_state['base_fc.0.bias'].copy_(state_dict['base_fc.0.bias'])
+        own_state['base_fc.2.weight'].copy_(state_dict['base_fc.2.weight'].view(500, 500, 1, 1))
+        own_state['base_fc.2.bias'].copy_(state_dict['base_fc.2.bias'])
+
+    def forward(self, x):
+        x = self.base_conv(x)
+        x = self.base_fc(x)
+        return x
+
