@@ -1,4 +1,5 @@
 import torch
+import pdb
 import torch.nn as nn
 import torch.nn.functional as F
 import time
@@ -233,8 +234,10 @@ class ModelSurfaceNormal(nn.Module):
                           inrml(nn.Conv2d(160, 500, 3, stride=1, padding=0)), 
                           nn.ReLU(inplace=True),
                           inrml(nn.Conv2d(500, 500, 1, stride=1, padding=0)),
-                          nn.ReLU(inplace=True),
-                          # Classify into 20 classes
+                          nn.ReLU(inplace=True))
+                        
+        # Classify into 20 classes
+        self.classifier = nn.Sequential(
                           inrml(nn.Conv2d(500, 20, 1, stride=1, padding=0)))
     
     def load_weights(self, state_dict):
@@ -251,9 +254,23 @@ class ModelSurfaceNormal(nn.Module):
         own_state['base_fc.0.bias'].copy_(state_dict['base_fc.0.bias'])
         own_state['base_fc.2.weight'].copy_(state_dict['base_fc.2.weight'].view(500, 500, 1, 1))
         own_state['base_fc.2.bias'].copy_(state_dict['base_fc.2.bias'])
+        
+        # Freeze the weights for the initial Conv and FC layers
+        for i in range(len(self.base_conv)):
+            if hasattr(self.base_conv[i], 'weight'):
+                self.base_conv[i].weight.requires_grad = False
+            if hasattr(self.base_conv[i], 'bias'):
+                self.base_conv[i].bias.requires_grad = False
+        
+        for i in range(len(self.base_fc)):
+            if hasattr(self.base_fc[i], 'weight'):
+                self.base_fc[i].weight.requires_grad = False
+            if hasattr(self.base_fc[i], 'bias'):
+                self.base_fc[i].bias.requires_grad = False
 
     def forward(self, x):
         x = self.base_conv(x)
         x = self.base_fc(x)
+        x = self.classifier(x)
         return x
 
