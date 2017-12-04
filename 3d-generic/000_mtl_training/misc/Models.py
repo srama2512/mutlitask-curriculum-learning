@@ -92,16 +92,20 @@ class ModelPose(nn.Module):
         super(ModelPose, self).__init__()
         self.base_conv = nn.Sequential(
                           inrml(nn.Conv2d(3, 20, 7, stride=1, padding=3)), # 3x101x101 -> 20x101x101
-                          nn.ReLU(inplace=True), 
+                          nn.ReLU(inplace=True),
+                          nn.BatchNorm2d(20),
                           nn.MaxPool2d(2, stride=2), # 20x50x50
                           inrml(nn.Conv2d(20, 40, 5, stride=1, padding=2)), # 40x50x50
                           nn.ReLU(inplace=True),
+                          nn.BatchNorm2d(40),
                           nn.MaxPool2d(2, stride=2), # 40x25x25
                           inrml(nn.Conv2d(40, 80, 4, stride=1, padding=1)), # 80x24x24
                           nn.ReLU(inplace=True),
+                          nn.BatchNorm2d(80),
                           nn.MaxPool2d(2, stride=2), # 80x12x12
                           inrml(nn.Conv2d(80, 160, 4, stride=2, padding=1)), # 160x6x6
                           nn.ReLU(inplace=True),
+                          nn.BatchNorm2d(160),
                           nn.MaxPool2d(2, stride=2)) # 160x3x3
 
         self.base_fc = nn.Sequential(
@@ -154,16 +158,20 @@ class ModelMatch(nn.Module):
         super(ModelMatch, self).__init__()
         self.base_conv = nn.Sequential(
                           inrml(nn.Conv2d(3, 20, 7, stride=1, padding=3)), # 3x101x101 -> 20x101x101
-                          nn.ReLU(inplace=True), 
+                          nn.ReLU(inplace=True),
+                          nn.BatchNorm2d(20),
                           nn.MaxPool2d(2, stride=2), # 20x50x50
                           inrml(nn.Conv2d(20, 40, 5, stride=1, padding=2)), # 40x50x50
                           nn.ReLU(inplace=True),
+                          nn.BatchNorm2d(40),
                           nn.MaxPool2d(2, stride=2), # 40x25x25
                           inrml(nn.Conv2d(40, 80, 4, stride=1, padding=1)), # 80x24x24
                           nn.ReLU(inplace=True),
+                          nn.BatchNorm2d(80),
                           nn.MaxPool2d(2, stride=2), # 80x12x12
                           inrml(nn.Conv2d(80, 160, 4, stride=2, padding=1)), # 160x6x6
                           nn.ReLU(inplace=True),
+                          nn.BatchNorm2d(160),
                           nn.MaxPool2d(2, stride=2)) # 160x3x3
 
         self.base_fc = nn.Sequential(

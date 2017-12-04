@@ -18,8 +18,8 @@ def str2bool(s):
     return s.lower() in ('yes', 'true', 't', '1')
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--h5_path', type=str, default='dataset/train/regTrain/prepro.h5', help='path to preprocessed h5 file')
-parser.add_argument('--json_path', type=str, default='dataset/train/regTrain/prepro.json', help='path to preprocessed json file')
+parser.add_argument('--h5_path', type=str, default='../dataset/train/regTrain/prepro.h5', help='path to preprocessed h5 file')
+parser.add_argument('--json_path', type=str, default='../dataset/train/regTrain/prepro.json', help='path to preprocessed json file')
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--batch_size', type=int, default=250)
 parser.add_argument('--gradient_clip', type=str2bool, default=True, help='Enable gradient clipping?')

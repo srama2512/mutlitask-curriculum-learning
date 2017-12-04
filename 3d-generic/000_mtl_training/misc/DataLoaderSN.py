@@ -20,20 +20,27 @@ class DataLoader:
             * normal_clusters
             * delaunay_vertices
         """
-        print('===> DataLoader: Reading images and labels')
+        #print('===> DataLoader: Reading images and labels')
         # Open h5 file for reading
         if hasattr(opts, 'images_path'):
             self.images = {}
+            self.normals_true = {}
             h5_file = h5py.File(opts.images_path, "r")
             for split in ["train", "valid", "test"]:
                 self.images[split] = np.array(h5_file['%s/images'%(split)])
                 imgs_temp = []
+                normals_true_temp = []
                 # Rescale the images to size 708x738 so that the final output after CNN is 20x20
                 for i in range(self.images[split].shape[0]):
                     img_temp = imresize(self.images[split][i].transpose(1, 2, 0), (708, 738)).transpose(2, 0, 1)
                     imgs_temp.append(img_temp[np.newaxis, :, :, :])
+                    normal_temp  = imresize(np.array(h5_file['%s/normals'%(split)][i]), (20, 20))
+                    normals_true_temp.append(normal_temp)
 
                 self.images[split] = np.concatenate(imgs_temp, axis=0).astype(np.float32)
+                # This stores the true surface normal directions
+                self.normals_true[split] = 2.0*np.concatenate(normals_true_temp, axis=0).astype(np.float32)/255.0-1;
+                
             h5_file.close()
             # Using imagenet mean and std by default
             self.image_mean = np.array([0.485, 0.456, 0.406])*255.0
@@ -71,21 +78,21 @@ class DataLoader:
             self.batch_size = opts.batch_size
         else:
             self.batch_size = 32
-        print('===> DataLoader: Using batch size of %d'%(self.batch_size))
+        #print('===> DataLoader: Using batch size of %d'%(self.batch_size))
 
         if hasattr(opts, 'random_seed'):
             self.random_seed = opts.random_seed
         else:
             self.random_seed = 123
-        print('===> DataLoader: Using random seed of %d'%(self.random_seed))
+        #print('===> DataLoader: Using random seed of %d'%(self.random_seed))
         np.random.seed(self.random_seed)
 
-        print('===> DataLoader: Loaded dataset')
+        #print('===> DataLoader: Loaded dataset')
         
-        print('Image mean: ')
-        print(self.image_mean)
-        print('Image std: ')
-        print(self.image_std)
+        #print('Image mean: ')
+        #print(self.image_mean)
+        #print('Image std: ')
+        #print(self.image_std)
         
         # Train counter
         self.train_counter = 0
@@ -132,7 +139,8 @@ class DataLoader:
         out_masks = np.take(self.masks[split], sample_indices, axis=0)
         out_images = np.take(self.images[split], sample_indices, axis=0)
         out_normals = np.take(self.normals[split], sample_indices, axis=0)
-        
+        out_normals_true = np.take(self.normals_true[split], sample_indices, axis=0)
+
         self.counters[split] += curr_batch_size
         
         # If the samples are exhausted, return True as the final output
@@ -141,4 +149,4 @@ class DataLoader:
             self.counters[split] = 0
             isExhausted = True
         
-        return torch.from_numpy(out_images), torch.from_numpy(out_normals), torch.from_numpy(out_masks), isExhausted
+        return torch.from_numpy(out_images), torch.from_numpy(out_normals), torch.from_numpy(out_masks), out_normals_true, isExhausted

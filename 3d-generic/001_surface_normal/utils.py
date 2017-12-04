@@ -1,4 +1,5 @@
 import torch
+import bottleneck
 import numpy as np
 import torch.nn.functional as F
 from sklearn.metrics import accuracy_score
@@ -29,6 +30,23 @@ def get_report(predicted_normals, true_normals, mask_normals, num_classes):
     binned_accuracy = accuracy_score(true_normals_reshape, predicted_normals_reshape, sample_weight=sample_weights)
 
     return unbinned_accuracy, binned_accuracy
+
+#def get_angular_errors(predicted_probs, true_normals, mask_normals, delaunay_triangles, clusters):
+#    """
+#    predicted_probs    : N x C x H x W where C is the number of classes. Contains the 
+#                         probabilities for each class at every pixel location.
+#    true_normals       : N x C x H x W where C = 3. Contains the true normal directions at
+#                         each pixel location.
+#    mask_normals       : N x H x W numpy array
+#    delaunay_triangles : K x 3 numpy array of vertex indices where K is the number of triangles
+#    clusters           : 20 x 3 numpy array of normal directions 
+#    """
+#    partitioned_indices = bottleneck.argpartition(-predicted_probs, 3, axis=1)
+#    num_images = true_normals.shape[0]
+#    W = true_normals.shape[3]
+#    H = true_normals.shape[2]
+#
+#    for i in range(num_images):
 
 def masked_cross_entropy_2d(logits, targets, masks):
     """

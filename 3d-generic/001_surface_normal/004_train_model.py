@@ -34,14 +34,15 @@ parser.add_argument('--save_dir', type=str, default='', help='path to save model
 parser.add_argument('--resume', type=str, default='', help='continue training from this checkpoint')
 parser.add_argument('--pretrained', type=str, default='', help='path to pre-trained weights')
 parser.add_argument('--random_seed', type=int, default=123)
+parser.add_argument('--lr_schedule', type=int, default=10, help='reduce learning rate by 2 every K epochs')
 
 opts = parser.parse_args()
 print(opts)
 
 torch.manual_seed(opts.random_seed)
 
-def create_optimizer(net, opts):
-    return optim.Adam(net.parameters(), lr=opts.lr, weight_decay=opts.weight_decay)
+def create_optimizer(net, lr, weight_decay):
+    return optim.Adam(net.parameters(), lr=lr, weight_decay=weight_decay)
     
 if len(opts.logdir) == 0:
     writer = SummaryWriter()
@@ -78,10 +79,7 @@ if opts.cuda:
 
 #criterion = masked_cross_entropy_2d
 
-if opts.pretrained != "":
-    optimizer = create_optimizer(net.classifier, opts)
-else:
-    optimizer = create_optimizer(net, opts)
+optimizer = create_optimizer(net.classifier, opts.lr, opts.weight_decay)
 # This input size is designed to give 10x20x20x20 output
 dummy_input = Variable(torch.randn((10, 3, 708, 738)))
 if opts.cuda:
@@ -99,7 +97,7 @@ def evaluate(net, loader, split):
     true_classes_all = []
     masks_all = []
     while not isExhausted:
-        images_curr, normals_curr, masks_curr, isExhausted = loader.batch_test(split)
+        images_curr, normals_curr, masks_curr, _, isExhausted = loader.batch_test(split)
         if opts.cuda:
             images_curr = images_curr.cuda()
             normals_curr = normals_curr.cuda()
@@ -133,6 +131,7 @@ epoch = 0
 best_binned_score = 0
 total_iters = loader.images['train'].shape[0] // opts.batch_size + 1
 json.dump(vars(opts), open(os.path.join(opts.save_dir, 'opts.json'), 'w'))
+current_lr = opts.lr
 
 for epoch in range(opts.epochs):
 
@@ -162,6 +161,10 @@ for epoch in range(opts.epochs):
             writer.add_scalar('data/train_loss', loss.data[0], epoch*total_iters + iter_no)
         
         iter_no += 1
+    
+    if (epoch + 1) % opts.lr_schedule == 0:
+        current_lr = current_lr / 2
+        optimizer = create_optimizer(net.classifier, current_lr, opts.weight_decay)
 
     unbinned_score, binned_score = evaluate(net, loader, 'valid')
     print('Epoch %d validation results: Unbinned score: %.3f , Binned score: %.3f'%(epoch, unbinned_score, binned_score))
