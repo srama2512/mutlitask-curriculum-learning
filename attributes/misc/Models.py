@@ -38,10 +38,9 @@ class LRN(nn.Module):
         self.ACROSS_CHANNELS = ACROSS_CHANNELS
         if ACROSS_CHANNELS:
             self.average=nn.AvgPool3d(kernel_size=(local_size, 1, 1),
-                    stride=1,
-                    padding=(int((local_size-1.0)/2), 0, 0))
+                    stride=1, padding=(int((local_size-1.0)/2), 0, 0))
         else:
-            self.average=nn.AvgPool2d(kernel_size=local_size,
+            self.average=nn.AvgPool2d(local_size,
                     stride=1,
                     padding=int((local_size-1.0)/2))
         self.alpha = alpha
@@ -65,29 +64,30 @@ class MCNN(nn.Module):
     def __init__(self):
         super(MCNN, self).__init__()
         self.conv_shared = nn.Sequential(
-                                ixvr(nn.Conv2d(3, 75, kernel_size=(7, 7), 1, 3)), # 75x224x224
+                                ixvr(nn.Conv2d(3, 75, (7, 7), 1, 3)), # 75x224x224
+                                #nn.BatchNorm2d(75),
                                 nn.ReLU(inplace=True),
-                                nn.MaxPool2d(kernel_size=(3, 3)), # 75x74x74
+                                nn.MaxPool2d((3, 3)), # 75x74x74
                                 LRN(local_size=5), 
-                                ixvr(nn.Conv2d(75, 200, kernel_size=(5, 5), 1, 2)), # 200x74x74
+                                ixvr(nn.Conv2d(75, 200, (5, 5), 1, 2)), # 200x74x74
+                                #nn.BatchNorm2d(200),
                                 nn.ReLU(inplace=True),
-                                nn.MaxPool2d(kernel_size=(3, 3)), # 200x24x24
+                                nn.MaxPool2d((3, 3)), # 200x24x24
                                 LRN(local_size=5))
 
-        self.conv_groups = []
         """
         The conv3 groups are Gender, Nose, Mouth, Eyes, 
         Face and Others (AroundHead, FacialHair, Cheeks, Fat) 
         """
         for i in range(6):
             curr_conv3 = nn.Sequential(
-                            ixvr(nn.Conv2d(200, 300, kernel_size=(3, 3), 1, 1)), # 300x24x24  
+                            ixvr(nn.Conv2d(200, 300, (3, 3), 1, 1)), # 300x24x24  
+                            #nn.BatchNorm2d(300),
                             nn.ReLU(inplace=True),
-                            nn.MaxPool2d(kernel_size=(5, 5)), # 300x4x4
+                            nn.MaxPool2d((5, 5)), # 300x4x4
                             LRN(local_size=5))
-            self.conv_groups.append(curr_conv3)
+            self.add_module('conv3%d'%(i), curr_conv3)
 
-        self.fc_groups = [] 
         self.fc_num_classes = [1, 2, 4, 5, 6, 13, 5, 2, 2]
 
         """
@@ -113,19 +113,20 @@ class MCNN(nn.Module):
                             nn.ReLU(inplace=True),
                             nn.Dropout(p=0.5),
                             ixvr(nn.Linear(512, self.fc_num_classes[i])))
-        
+
+            self.add_module('fc%d'%(i), curr_fc)        
+
     def forward(self, x):
         x = self.conv_shared(x)
         g1 = []
         for i in range(6):
-            g1.append(self.conv_groups[i](x).view(-1, 4800))
+            g1.append(getattr(self, 'conv3%d'%(i))(x).view(-1, 4800))
         
         g2 = []
         for i in range(9):
             if i < 5:
-                g2.append(self.fc_groups[i](g1[i]))
+                g2.append(getattr(self, 'fc%d'%(i))(g1[i]))
             else:
-                g2.append(self.fc_groups[i](g1[5]))
+                g2.append(getattr(self, 'fc%d'%(i))(g1[5]))
 
         return torch.cat(g2, dim=1)
-
