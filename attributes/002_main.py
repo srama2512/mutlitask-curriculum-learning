@@ -69,7 +69,7 @@ def train(opts):
         chkpt = torch.load(opts.load_model)
         net.load_state_dict(chkpt)
 
-    traindataset = AttributesDataset(opts, split='train', transform=transforms.Compose([RandomCrop(224), Normalize(mean=(112.012, 97.695, 87.333), std=(75.734, 69.767, 68.425)), RandomTranslate(40), ToTensor()]))
+    traindataset = AttributesDataset(opts, split='train', transform=transforms.Compose([RandomCrop(224), Normalize(mean=(112.012, 97.695, 87.333), std=(75.734, 69.767, 68.425)), ToTensor()]))
     valdataset = AttributesDataset(opts, split='val', transform=transforms.Compose([CenterCrop(224), Normalize(mean=(112.012, 97.695, 87.333), std=(75.734, 69.767, 68.425)), ToTensor()]))
     testdataset = AttributesDataset(opts, split='test', transform=transforms.Compose([CenterCrop(224), Normalize(mean=(112.012, 97.695, 87.333), std=(75.734, 69.767, 68.425)), ToTensor()]))
 

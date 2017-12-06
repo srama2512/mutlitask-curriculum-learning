@@ -46,9 +46,33 @@ class AttributesDataset(Dataset):
         self.img_names = json_file['img_names']
         self.attribute_names = json_file['attribute_names']
         self.transform = transform
-        self.labels = np.array(self.h5_file['labels'])
-        # Disable this for low RAM systems
-        self.images = np.array(self.h5_file['imgs'])
+        temp_images = np.array(self.h5_file['imgs'])
+        temp_labels = np.array(self.h5_file['labels'])
+        self.images = temp_images[self.idx, :, :, :]
+        self.labels = temp_labels[self.idx, :]
+
+        if split == 'train':
+            # Disable this for low RAM systems
+            images_temp = self.images 
+            labels_temp = self.labels 
+            self.images = np.zeros((images_temp.shape[0]*13, images_temp.shape[1], images_temp.shape[2], images_temp.shape[3]), dtype=images_temp.dtype)
+            self.labels = np.zeros((labels_temp.shape[0]*13, labels_temp.shape[1]), dtype=labels_temp.dtype)
+            n_orig = images_temp.shape[0]
+            self.images[:n_orig, :, :, :] = images_temp[:, :, :, :]
+            self.labels[:n_orig, :] = labels_temp[:, :]
+
+            translations_list = [(10, 0), (0, 10), (-10, 0), (0, -10), \
+                                 (20, 0), (0, 20), (-20, 0), (0, -20), \
+                                 (30, 0), (0, 30), (-30, 0), (0, -30)]
+            counts = n_orig
+            for i in range(len(translations_list)):
+                t_curr = translations_list[i]
+                trans_func = FixedTranslate(t_curr[0], t_curr[1], (112, 98, 87))
+                for j in range(n_orig):
+                    out_v = trans_func({'image': images_temp[j], 'labels': labels_temp[j]})
+                    self.images[counts, :, :, :] = out_v['image']
+                    self.labels[counts, :] = out_v['labels']
+                    counts += 1 
 
         self.ordering = {"Male": 0, "Big_Nose": 1, "Pointy_Nose": 2, "Big_Lips": 3, "Wearing_Lipstick": 4, "Mouth_Slightly_Open": 5, "Smiling": 6, "Arched_Eyebrows": 7, "Bags_Under_Eyes": 8, "Bushy_Eyebrows": 9, "Eyeglasses": 10, "Narrow_Eyes": 11, "Attractive": 12, "Blurry": 13, "Heavy_Makeup": 14, "Oval_Face": 15, "Pale_Skin": 16, "Young": 17, "Bald": 18, "Bangs": 19, "Black_Hair": 20, "Blond_Hair": 21, "Brown_Hair": 22, "Wearing_Earrings": 23, "Gray_Hair": 24, "Wearing_Hat": 25, "Wearing_Necklace": 26, "Wearing_Necktie": 27, "Receding_Hairline": 28, "Straight_Hair": 29, "Wavy_Hair": 30, "5_o_Clock_Shadow": 31, "Goatee": 32, "Mustache": 33, "No_Beard": 34, "Sideburns": 35, "High_Cheekbones": 36, "Rosy_Cheeks": 37, "Chubby": 38, "Double_Chin": 39}
         self.inverted_ordering = {v: k for k, v in self.ordering.iteritems()}
@@ -60,14 +84,14 @@ class AttributesDataset(Dataset):
         self.labels = self.labels[:, np.argsort(permutation)]
 
     def __len__(self):
-        return self.idx.shape[0]
+        return self.images.shape[0]
 
     def __getitem__(self, idx):
         # Image is 250x250x3
         # Revert to this for low RAM systems
         #image = np.array(self.h5_file['imgs'][self.idx[idx]])
-        image = self.images[self.idx[idx]]
-        labels = self.labels[self.idx[idx]]
+        image = self.images[idx]
+        labels = self.labels[idx]
 
         sample = {'image': image, 'labels': labels}
 
@@ -138,6 +162,42 @@ class RandomCrop(object):
                       left: left + new_w]
 
         return {'image': image, 'labels': labels}
+
+class FixedTranslate(object):
+    """Translate (jitter)  the image in a sample. 
+
+    Args:
+        translation_x (int): Translation desired along x. 
+        translation_y (int): Translation desired along y.
+    """
+
+    def __init__(self, translation_x, translation_y, fill=(0, 0, 0)):
+        self.t_x = translation_x
+        self.t_y = translation_y
+        self.fill = fill
+
+    def __call__(self, sample):
+        image, labels = sample['image'], sample['labels']
+
+        h, w = image.shape[:2]
+
+        new_image = np.zeros((h, w, 3), dtype=image.dtype)
+        for i in range(3):
+            new_image[:, :, i] = self.fill[i]
+
+        x_trans = self.t_x
+        y_trans = self.t_y
+        
+        if x_trans >= 0 and y_trans >= 0:
+            new_image[y_trans:, x_trans:, :] = image[:(h-y_trans), :(w-x_trans), :]
+        elif x_trans >= 0 and y_trans < 0:
+            new_image[:y_trans, x_trans:, :] = image[-y_trans:, :(w-x_trans), :]
+        elif x_trans < 0 and y_trans >= 0:
+            new_image[y_trans:, :x_trans, :] = image[:(h-y_trans), -x_trans:, :]
+        else:
+            new_image[:y_trans, :x_trans, :] = image[-y_trans:, -x_trans:, :]
+
+        return {'image': new_image, 'labels': labels}
 
 class RandomTranslate(object):
     """Randomly translate (jitter)  the image in a sample. 
@@ -267,7 +327,7 @@ if __name__ == '__main__':
     attribute_dataset = AttributesDataset(opts, split='train', \
 					  transform=transforms.Compose([Rescale(200), 
 									RandomCrop(160),
-                                                                        RandomTranslate(20),
+                                    RandomTranslate(20),
 									ToTensor()]))
 
     attribute_dataloader = DataLoader(attribute_dataset, batch_size = 30, shuffle=True, num_workers=4)
